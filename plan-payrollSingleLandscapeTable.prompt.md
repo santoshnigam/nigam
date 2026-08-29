@@ -1,0 +1,3 @@
+In the Payroll section, don't print each teacher's salary on a separate page. Instead, create a single landscape table that displays the salary details of all teachers on one page. The layout should look like a professional database table, with each teacher shown in a separate row and all salary-related columns displayed clearly.
+
+The print format should be the same as the "All Teacher Receipt" print layout that is already working in the app. Use that style instead of the current payroll print format. Do not generate separate pages for each teacher; all teacher salary records should appear together in one landscape page in a clean tabular format.
