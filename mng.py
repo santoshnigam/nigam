@@ -8,17 +8,7 @@ from io import BytesIO
 from datetime import date
 import pandas as pd
 import streamlit as st
-try:
-    from dotenv import load_dotenv
-    _DOTENV_AVAILABLE = True
-except Exception:
-    # If python-dotenv is not installed in the environment, provide
-    # a noop fallback and let the app continue (Streamlit will show
-    # a warning later if required env vars are missing).
-    def load_dotenv(*args, **kwargs):
-        return False
-
-    _DOTENV_AVAILABLE = False
+from dotenv import load_dotenv
 from supabase import create_client, Client
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -44,30 +34,19 @@ st.set_page_config(
 # Load .env
 load_dotenv()
 
-def get_setting(name):
-    value = os.getenv(name)
-    if value:
-        return value
-
-    try:
-        return st.secrets[name]
-    except Exception:
-        return None
-
-
 # Get Supabase credentials
-SUPABASE_URL = get_setting("SUPABASE_URL")
-SUPABASE_KEY = get_setting("SUPABASE_KEY")
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
 
 # Check credentials
-if not SUPABASE_URL or not SUPABASE_KEY:
-    st.error("Supabase URL or Key is missing. Add SUPABASE_URL and SUPABASE_KEY to Streamlit secrets.")
+if not supabase_url or not supabase_key:
+    st.error("Supabase URL or Key is missing in .env file")
     st.stop()
 
 # Connect Supabase
 @st.cache_resource
 def init_supabase() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    return create_client(supabase_url,supabase_key,)
 
 supabase = init_supabase()
 
@@ -599,10 +578,10 @@ def create_payroll_report_html(teachers, school_name="Shree Janta Secondary Scho
             <div style="margin-top:24px;border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff;">
                 <h3 style="margin:0 0 12px 0;color:#0f172a;">{format_display_value(teacher.get('teacher_id', 'N/A'))} - {format_display_value(teacher.get('name', 'N/A'))}</h3>
                 <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                    {''.join(rows)}
+                    {rows}
                 </table>
             </div>
-            """
+            """.format(rows="".join(rows))
         )
 
     report_html = f"""
@@ -752,7 +731,7 @@ def get_teacher_salary_summary(teacher):
     deductions = float(teacher.get("deductions", teacher.get("deduction", 0)) or 0)
     bonus = float(teacher.get("bonus", 0) or 0)
     net_salary = float(teacher.get("net_salary", base_salary + allowances - deductions) or 0)
-    final_payable = float(net_salary + bonus)
+    final_payable = float(net_salary + allowances + bonus - deductions)
 
     return {
         "teacher_id": teacher.get("teacher_id", ""),
@@ -1088,7 +1067,7 @@ def render_salary_management_section(title, caption, teacher_id_key, submit_labe
             )
 
         if teacher:
-            final_payable = net_salary + bonus
+            final_payable = net_salary + allowances + bonus - deductions
             st.metric("Final Payable Amount", f"Rs. {final_payable:,.2f}")
         else:
             st.info("Enter a valid Teacher ID to calculate the final payable amount.")
@@ -1118,7 +1097,7 @@ def render_salary_management_section(title, caption, teacher_id_key, submit_labe
                     "deductions": float(deductions),
                     "bonus": float(bonus),
                     "net_salary": float(net_salary),
-                    "final_payable_amount": float(net_salary + bonus),
+                    "final_payable_amount": float(net_salary + allowances + bonus - deductions),
                     "payment_status": "Paid",
                     "transaction_id": (reference_no or f"SLR-{uuid.uuid4().hex[:8].upper()}"),
                     "generated_by": st.session_state.get("username", "Admin")
@@ -1675,7 +1654,6 @@ def admin_dashboard():
             "💳 Payment Approval",
             "🧾 Fee Receipts",
             "🧾 Payroll",
-            "💼 Salary Management",
             "📅 Student Attendance",
             "📅 Teacher Attendance",
             "📝 Student Marks",
@@ -3320,19 +3298,7 @@ def admin_dashboard():
             show_history=False
         )
 
-    # =====================================================
-    # SALARY MANAGEMENT
-    # =====================================================
-
-    elif menu == "💼 Salary Management":
-
-        render_salary_management_section(
-            title="💼 Salary Management",
-            caption="Pay salaries to teachers, save payment records, and print salary slips.",
-            teacher_id_key="salary_teacher_id",
-            submit_label="💸 Pay Salary",
-            show_history=True
-        )
+   
 
     # =====================================================
     # STUDENT ATTENDANCE
@@ -3348,14 +3314,14 @@ def admin_dashboard():
             supabase
             .table("students")
             .select(
-                "admission_no,name,class_name,section"
+                "admission_no,name,class_name"
             )
             .execute()
         )
 
         if students.data:
             student_map = {
-                f"{x['admission_no']} | {x['name']} | {x.get('class_name', '')} | {x.get('section', '')}": x
+                f"{x['admission_no']} | {x['name']}": x
                 for x in students.data
             }
 
@@ -3396,8 +3362,7 @@ def admin_dashboard():
                         .insert({
                             "admission_no": student["admission_no"],
                             "student_name": student["name"],
-                            "class_name": student.get("class_name", ""),
-                            "section": student.get("section", ""),
+                            "class_name": student["class_name"],
                             "attendance_date": str(attendance_date),
                             "status": status,
                             "remarks": remarks
@@ -3412,7 +3377,7 @@ def admin_dashboard():
                 attendance_history = (
                     supabase
                     .table("student_attendance")
-                    .select("admission_no,student_name,class_name,section,attendance_date,status,remarks")
+                    .select("admission_no,student_name,class_name,attendance_date,status,remarks")
                     .eq("admission_no", student["admission_no"])
                     .order("id", desc=True)
                     .limit(20)
@@ -4505,14 +4470,6 @@ def student_dashboard():
             pdf_data = create_receipt_pdf(
                 receipt,
                 school
-            )
-
-            st.download_button(
-                label="📄 Download PDF Receipt",
-                data=pdf_data,
-                file_name=f"fee_receipt_{receipt.get('receipt_no', 'student')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
             )
 
            
