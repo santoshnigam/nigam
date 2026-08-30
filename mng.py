@@ -2450,10 +2450,6 @@ def admin_dashboard():
                     "Faculty Name *"
                 )
 
-                department = st.text_input(
-                    "Department"
-                )
-
                 designation = st.text_input(
                     "Designation"
                 )
@@ -2505,9 +2501,6 @@ def admin_dashboard():
 
                             "name":
                                 name,
-
-                            "department":
-                                department,
 
                             "designation":
                                 designation,
@@ -3898,7 +3891,6 @@ def principal_dashboard():
             "👨‍🎓 Students",
             "👨‍🏫 Teachers",
             "💰 Fees",
-            "🧾 Receipts",
             "📊 Finance"
         ]
     )
@@ -3929,17 +3921,15 @@ def principal_dashboard():
             students = supabase.table("students").select("id").execute()
             teachers = supabase.table("teachers").select("id").execute()
             fees = supabase.table("fees").select("total_fee,paid_amount,due_amount").execute()
-            receipts = supabase.table("fee_receipts").select("id").execute()
 
             total_fee = sum(float(x.get("total_fee") or 0) for x in fees.data or [])
             paid = sum(float(x.get("paid_amount") or 0) for x in fees.data or [])
             due = sum(float(x.get("due_amount") or 0) for x in fees.data or [])
 
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3 = st.columns(3)
             c1.metric("👨‍🎓 Students", len(students.data or []))
             c2.metric("👨‍🏫 Teachers", len(teachers.data or []))
-            c3.metric("🧾 Receipts", len(receipts.data or []))
-            c4.metric("📌 Due Fee", f"Rs. {due:,.2f}")
+            c3.metric("📌 Due Fee", f"Rs. {due:,.2f}")
 
             st.divider()
 
@@ -3987,19 +3977,6 @@ def principal_dashboard():
                 st.dataframe(pd.DataFrame(fees.data), use_container_width=True)
             else:
                 st.info("No fee records found.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-    elif menu == "🧾 Receipts":
-
-        st.title("🧾 Fee Receipts")
-
-        try:
-            receipts = supabase.table("fee_receipts").select("*").execute()
-            if receipts.data:
-                st.dataframe(pd.DataFrame(receipts.data), use_container_width=True)
-            else:
-                st.info("No receipt records found.")
         except Exception as e:
             st.error(f"Error: {e}")
 
